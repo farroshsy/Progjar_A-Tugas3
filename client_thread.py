@@ -4,66 +4,72 @@ import logging
 import threading
 import time
 
-def kirim_data():
+# Set basic logging
+logging.basicConfig(level=logging.INFO)
+
+
+def kirim_data(counters):
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     logging.warning("membuka socket")
 
-    server_address = ('172.22.0.2', 45000)
+    server_address = ('172.22.0.2', 45001)
     logging.warning(f"opening socket {server_address}")
     sock.connect(server_address)
+    sock.settimeout(20)  # Set a timeout of 20 seconds
 
     try:
         # Send data
         message = 'TIME Testing\r\n'
         logging.warning(f"[CLIENT] sending {message}")
         sock.sendall(message.encode('utf-8'))
+
         # Look for the response
         amount_received = 0
         amount_expected = len(message)
         while amount_received < amount_expected:
-            data = sock.recv(1024).decode('utf-8')
+            try:
+                data = sock.recv(1024).decode('utf-8')
+            except socket.timeout:
+                logging.warning("Timeout occurred. Closing the socket.")
+                break
+
             amount_received += len(data)
             logging.warning(f"[DITERIMA DARI SERVER] {data}")
+
+        logging.info("[CLIENT] Request sent and response received.")
+        counters[0] += 1  # Increment total requests
+        counters[1] += 1  # Increment successful responses
+    except:
+        logging.warning("[CLIENT] Failed to send request or receive response.")
+        counters[0] += 1  # Increment total requests
     finally:
-        logging.warning("closing")
+        logging.warning("Testing Done")
         sock.close()
 
-def print_thread_count():
-    count = 0
-    max_count = 0
-    start_time = time.time()
-    end_time = start_time + 5  # Run for 5 seconds
-
-    while time.time() < end_time:
-        count = threading.active_count()
-        if count > max_count:
-            max_count = count
-        print(f"Total thread count: {count}")
-        time.sleep(0.01)  # Print thread count every 0.01 second
-
-    print(f"Maximum thread count: {max_count}")
 
 if __name__ == '__main__':
-    # Disable logging temporarily
-    logging.disable(logging.CRITICAL)
-
-    # Start the thread count monitoring thread
-    thread = threading.Thread(target=print_thread_count)
-    thread.start()
-
-    # Start a large number of client threads
+    time_test = 10
     threads = []
-    for i in range(1000):
-        thread = threading.Thread(target=kirim_data)
+    max_threads = 0
+    counters = [0, 0]  # [total_requests, successful_responses]
+
+    start = time.perf_counter()
+
+    while time.perf_counter() - start < time_test:
+        thread = threading.Thread(target=kirim_data, args=(counters,))
         thread.start()
         threads.append(thread)
+        count = threading.active_count()
+        if count > max_threads:
+            max_threads = count
 
-    # Wait for all client threads to finish
+    # Wait for all threads to complete
     for thread in threads:
         thread.join()
 
-    # Re-enable logging
-    logging.disable(logging.NOTSET)
+    total_requests = counters[0]
+    successful_responses = counters[1]
 
-    # Wait for the monitoring thread to complete
-    thread.join()
+    print(f"Jumlah maksimum thread yang dapat dieksekusi dalam jangka waktu {time_test} detik adalah {max_threads} thread")
+    print(f"Total requests: {total_requests}")
+    print(f"Successful responses: {successful_responses}")
